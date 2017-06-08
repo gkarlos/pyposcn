@@ -1,11 +1,18 @@
 import argparse
-import threading
+import os
+import sys
 from Networking import PortScanner, IpChecker
 
 ip = port_start = port_end = file_out = 0
 
-SYN_SCAN = 0
-CONNECT_SCAN = 1
+SYN_SCAN = PortScanner.TYPE_SCAN_SYN
+CONNECT_SCAN = PortScanner.TYPE_SCAN_SYN
+
+
+def sudo_check():
+    if os.getuid() != 0:
+        print >> sys.stderr, 'You need root permissions!'
+    sys.exit(1)
 
 def arg_parse():
     parser = argparse.ArgumentParser(description="Pyposcn port scanner")
@@ -23,24 +30,26 @@ def scan(ip, ports):
     print ["Scanning", ip, ports]
 
 
+def create_scanner_input() :
+    return { ip: range(10000, 11000) }
+
+
 def scan_ports(ip, start, end, file=None):
-    #start threads ranges of ports
     if not IpChecker(ip).up():
-        print 'Remote host is down!'
-    else:
-        print 'Remote host is up'
-    lock = threading.Lock()
+        print 'Remote host is down. Exiting...'
+        return
 
-    thread1 = PortScanner(ip, 80, 1122, SYN_SCAN, lock)
-    #thread2 = PortScanner(ip, 1123, 1133, SYN_SCAN, lock)
+    scanner = PortScanner(create_scanner_input(), PortScanner.TYPE_SCAN_SYN, PortScanner.TYPE_SCANNER_PAR)
+    scanner.start() # blocking call
+    res = scanner.results()
 
-    #print "unable to start threads"
-
-    thread1.start()
-    #thread2.start()
+    print res
 
 
 
 
+
+
+sudo_check()
 arg_parse()
 scan_ports(ip, 1111, 1111)

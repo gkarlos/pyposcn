@@ -37,73 +37,169 @@ def get_lan_ip():
 
 LOCAL_ADDR = get_lan_ip()
 
+# noinspection PyBroadException
 class IpChecker():
     def __init__ (self, remote_addr):
         self.remote_addr = remote_addr
+        self.lock = threading.Lock()
 
     def up(self):
+        self.lock.acquire()
         try:
             ping = sr1(IP(dst=self.remote_addr)/ICMP(), timeout=10, verbose=0)
-            if ping == None:
+            if str(type(ping)) == "<type 'NoneType'>":
                 return False
             return True
         except:
             return False
+        finally:
+            self.lock.release()
 
-class PortScanner(threading.Thread):
 
-    def __init__(self, ip_addr, start_port, end_port, scan_type, lock):
-        threading.Thread.__init__(self)
-        self.thread_id = "thread " + str(start_port) + " - " + str(end_port)
-        self.REMOTE_ADDR = ip_addr
+'''
+A sequentianl PortScanner will do work in the same thread that called start()
+
+A parallel PortScanner will spawn workers!
+'''
+class PortScanner(object):
+
+    TYPE_SCAN_SYN = 0
+    TYPE_SCAN_CONNECT = 1
+    TYPE_SCANNER_SEQ = 2
+    TYPE_SCANNER_PAR = 3
+
+
+    WORKER_JOB_THRESH = 10
+
+    def init_seq(self):
+        pass
+
+    def init_par(self):
+        self.workers = []
+        for ip in self.workload:
+            self.worker_results[ip] = {'open' : [], 'closed' : []}
+            print ip
+            ports = self.workload[ip]
+            nworkers = len(ports) / 10 if len(ports) / 10 == 0 else len(ports) / 10 + 1
+            print 'Requested %s: %s. Will spawn %d workers' % (ip, str(ports), nworkers)
+
+            chunk = len(ports) / nworkers
+            left = len(ports) % nworkers
+            for i in range(nworkers):
+                worker_load = ports[i * chunk: (i + 1) * chunk]
+                if left != 0:
+                    worker_load.append(ports[len(ports) - left])
+                    left = left - 1
+                self.workers.append(_PortScannerWorker(ip, self.scan_type, worker_load, self))
+
+    def __init__(self, workload, scan_type, scanner_type):
         self.start_port = 80
         self.end_port = 90
         self.ports = range(self.start_port, self.end_port + 1)
-        self.lock = lock
+
         self.scan_type = scan_type
-        self.open = []
-        self.closed = []
+        self.scanner_type = scanner_type
+        self.workload = workload
+        self.worker_results = {}
 
-        from scapy.layers.inet import IP, TCP
+        self.lock = threading.Lock()
 
-        self.ip = IP(dst=self.REMOTE_ADDR)
+        if self.scanner_type == PortScanner.TYPE_SCANNER_SEQ:
+            self.init_seq()
+        elif self.scanner_type == PortScanner.TYPE_SCANNER_PAR:
+            self.init_par()
+        else:
+            raise ValueError('Got scan_type = %d. Expected PortScanner.TYPE_SCANNER_SEQ(2) | PortScanner.TYPE_SCANNER_PAR(3)' % self.scan_type)
+
+        #self.ip = IP(dst=self.REMOTE_ADDR)
+
+    # Thread-safe method for updating the total results dict
+    # To be used by each worker
+    # @ip - Ip key to the global dictionary
+    # @open - A list of open ports
+    # @closed - A list of closed ports
+    def update_results(self, ip, open, closed):
+        self.lock.acquire()
+        if len(open) > 0:
+            self.worker_results[ip]['open'] = self.worker_results[ip]['open'] + open
+        if len(closed) > 0:
+            self.worker_results[ip]['closed'] = self.worker_results[ip]['closed'] + closed
+        self.lock.release()
+
+    def results(self):
+        return self.worker_results
+
+    def start_seq(self):
+        pass
+
+    def start_par(self):
+        for worker in self.workers:
+            print 'Worker Started: ' + str(worker.ip_addr) + ':' + str(worker.ports) + (' SYN' if worker.scan_type == PortScanner.TYPE_SCAN_SYN else ' CONNECT')
+
+            worker.start()
+        for worker in self.workers:
+            worker.join()
+
+    def start(self):
+        if self.scanner_type == PortScanner.TYPE_SCANNER_PAR:
+            self.start_par()
+        else:
+            self.start_seq()
+
+        #print self.worker_results
 
     def init_net(self):
         pass
 
-    def syn_scan(self):
+    def connect_scan(self):
         pass
 
     def run(self):
-        print self.ports
+        if self.scan_type == PortScanner.TYPE_SCAN_SYN:
+            self.syn_scan()
+        elif self.scan_type == PortScanner.TYPE_SCAN_CONNECT:
+            self.connect_scan()
+        else:
+            print "Invalid Scan Type: %s" % self.scan_type
+
+
+
+class _PortScannerWorker(threading.Thread):
+    def __init__(self, ip_addr, scan_type, ports, parent):
+        threading.Thread.__init__(self)
+        self.scan_type = scan_type
+        self.ip_addr = ip_addr
+        self.ports = ports
+        self.parent = parent
+        self.open = []
+        self.closed = []
+
+
+    # def run(self):
+    #     print 'Worker Started: ' + str(self.ip_addr) + (' SYN' if self.scan_type == PortScanner.TYPE_SCAN_SYN else ' CONNECT')
+
+
+    def syn_scan(self):
         for port in self.ports:
             sport = random.randint(1024, 65535)
             syn = TCP(sport=sport, dport=port, flags='S', seq=1000)
-            res = sr1(IP(dst=self.REMOTE_ADDR) / syn, timeout=1)
+            res = sr1(IP(dst=self.ip_addr) / syn, timeout=1, verbose=0)
             if str(type(res)) == "<type 'NoneType'>":
-                print "port %d is closed" % port
                 self.closed.append(port)
             elif res.haslayer(TCP):
                 if res.getlayer(TCP).flags == 0x12:
-                    rst = sr(IP(dst=self.REMOTE_ADDR)/TCP(sport=sport, dport=port, flags='AR'), timeout=1)
-                    print "port %d is open" % port
+                    rst = sr(IP(dst=self.ip_addr) / TCP(sport=sport, dport=port, flags='AR'), timeout=1, verbose=0)
                     self.open.append(port)
 
                 elif res.getlayer(TCP).flags == 0x14:
-                    print "port %d is closed"
                     self.closed.append(port)
+        self.parent.update_results(self.ip_addr, self.open, self.closed)
 
+    def connect_scan(self):
+        pass
 
-
-
-        self.lock.acquire()
-        print self.thread_id + " SYN_SCAN" if self.scan_type == 0 else " CONNECT_SCAN"
-        print "OPEN: ", self.open
-        print "CLOSED: ", self.closed
-        self.lock.release()
-
-class PortScannerWorker():
-    pass
+    def run(self):
+        self.syn_scan()
 
 
 class API():
