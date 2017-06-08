@@ -12,7 +12,7 @@ CONNECT_SCAN = PortScanner.TYPE_SCAN_SYN
 def sudo_check():
     if os.getuid() != 0:
         print >> sys.stderr, 'You need root permissions!'
-    sys.exit(1)
+        sys.exit(1)
 
 def arg_parse():
     parser = argparse.ArgumentParser(description="Pyposcn port scanner")
@@ -31,7 +31,7 @@ def scan(ip, ports):
 
 
 def create_scanner_input() :
-    return { ip: range(10000, 11000) }
+    return { ip: range(80, 1080) }
 
 
 def scan_ports(ip, start, end, file=None):
