@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 install_requires = []
 
@@ -8,6 +8,14 @@ with open('requirements.txt') as f:
             continue
         install_requires.append(line)
 
+classifiers=[
+    'Development Status :: 3 - Alpha',
+    'License :: MIT License',
+    'Programming Language :: Python :: 2.7'
+]
+
+keywords = 'networking ports port-scanner api'
+
 metadata = dict(
     name = "Pyposcn",
     version='0.1',
@@ -16,8 +24,10 @@ metadata = dict(
     author_email='blabla@gmail.com',
     license='MIT',
     url='https://github.com/gkarlos/pyposcn',
-    install_requires=install_requires
-
+    install_requires=install_requires,
+    classifiers=classifiers,
+    keywords=keywords,
+    packages=find_packages()
     )
 
 setup(**metadata)

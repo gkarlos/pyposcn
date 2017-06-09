@@ -1,7 +1,8 @@
 import argparse
 import os
 import sys
-from Networking import PortScanner, IpChecker
+
+from pyposcn.api.networking import PortScanner, IpChecker
 
 ip = port_start = port_end = file_out = 0
 
