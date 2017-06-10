@@ -1,7 +1,132 @@
 import threading
 import os
 import socket
+import time
 from scapy.layers.inet import IP, TCP, random, sr1, ICMP, sr
+
+class KnownPorts(object):
+    COMMON = {
+        7: 'Echo',
+        18: 'MSP',
+        20: 'FTP-data',
+        21: 'FTP-control',
+        22: 'SSH',
+        23: 'TELNET',
+        25: 'SMTP',
+        37: 'Time Protocol',
+        38: 'Route Access Protocol (RAP)',
+        43: 'WHOIS',
+        53: 'DNS',
+        69: 'TFTP',
+        70: 'Gopher',
+        79: 'Finger',
+        80: 'HTTP',
+        88: 'Kerberos',
+        103: 'X.400',
+        109: 'POP2',
+        110: 'POP3',
+        115: 'SFTP',
+        119: 'NNTP',
+        123: 'NTP',
+        137: 'NETBIOS-NS',
+        138: 'NETBIOS-DGM',
+        139: 'NETBIOS-SSN',
+        143: 'IMAP',
+        152: 'BFTP',
+        153: 'SGMP',
+        156: 'SQL-SERVER',
+        158: 'DMSP',
+        161: 'SNMP',
+        162: 'SNMP Trap',
+        179: 'BGP',
+        194: 'IRC',
+        199: 'SMUX',
+        213: 'IPX',
+        220: 'IMAP3',
+        264: 'BGMP',
+        318: 'TSP',
+        389: 'LDAP',
+        427: 'SLP',
+        443: 'HTTPS',
+        444: 'SNPP',
+        445: 'MS-DS Active Directory/SMB',
+        464: 'Kerberos Change/Set password',
+        500: 'ISAKMP/IKE',
+        512: 'Rexec',
+        520: 'RIP',
+        521: 'RIPNG',
+        524: 'NCP',
+        530: 'RPC',
+        543: 'Kerberos Login',
+        544: 'Kerberos Remote Shell',
+        546: 'DHCP-CLIENT',
+        547: 'DHCP-SERVER',
+        548: 'Apple Filing Protocol (AFP)',
+        593: 'HTTP RPC',
+        631: 'Internet Printing Protocol (IPP)',
+        636: 'LDAPS',
+        639: 'MSDP',
+        749: 'Kerberos Administration',
+        750: 'Kerberos v4',
+        830: 'NETCONF-SSH',
+        831: 'NETCONF-BEEP',
+        832: 'NETCONF-HTTPS for SOAP',
+        833: 'NETCONF-BEEP for SOAP',
+        853: 'DNS over TLS',
+        873: 'rsync',
+        989: 'FTPS-data',
+        990: 'FTPS-control',
+        992: 'TELNET-TLS/SSL',
+        993: 'IMAPS',
+        995: 'POP3-SSL',
+        993: 'IMAP-SSL',
+        2082: 'CPANEL',
+        2083: 'CPANEL',
+        2086: 'WHM/CPANEL',
+        2087: 'WHM/CPANEL',
+        3306: 'MYSQL',
+        8444: 'PLESK',
+        10000: 'VIRTUALMIN/WEBMIN'
+    }
+
+    REGISTERED = {
+        1029: 'MS-DCOM',
+        1080: 'SOCKS',
+        1119: 'Blizzard Battle.net chat',
+        1167: 'Cisco IP SLA',
+        1194: 'OpenVPN',
+        1220: 'Quicktime Streaming Service',
+        1414: 'IBM WebSphere MQ',
+        1723: 'PPTP',
+        1755: 'MMS/MS-STREAMING',
+        1801: 'Microsoft Message Queueing',
+        1900: "SSDP"
+              """
+                TODO: Add more ports!
+              """
+    }
+
+    @staticmethod
+    def check(p):
+        port = int(p)
+        if str(port) in KnownPorts.COMMON:
+            return KnownPorts.COMMON[str(port)]
+        else:
+            return ''
+
+    @staticmethod
+    def get_common():
+        return KnownPorts.COMMON
+
+    @staticmethod
+    def pretty_print():
+        from tabulate import tabulate
+        #sorted_common_ports = sorted(KnownPorts.COMMON_PORTS)
+        data = [[key, KnownPorts.COMMON[key]] for key in sorted(KnownPorts.COMMON)]
+        #data = map(list, KnownPorts.COMMON_PORTS.items())
+        print tabulate(data, headers=['#', 'Port', 'Service'], tablefmt='orgtbl', showindex='always')
+
+
 
 if os.name != "nt":
     import fcntl
@@ -39,9 +164,13 @@ LOCAL_ADDR = get_lan_ip()
 
 # noinspection PyBroadException
 class IpChecker():
+    ADDR_TYPE_IPV4 = 0
+    ADDR_TYPE_IPV6 = 1
+
     def __init__ (self, remote_addr):
         self.remote_addr = remote_addr
         self.lock = threading.Lock()
+        self.type = None
 
     def up(self):
         self.lock.acquire()
@@ -54,6 +183,53 @@ class IpChecker():
             return False
         finally:
             self.lock.release()
+
+    def valid(self):
+        if self.type is None:
+            return self._is_valid_ipv4_address(self.remote_addr) or self._is_valid_ipv6_address(self.remote_addr)
+        return True
+
+    def _is_valid_ipv4_address(self, address):
+        try:
+            socket.inet_pton(socket.AF_INET, address)
+        except AttributeError:  # no inet_pton here, sorry
+            try:
+                socket.inet_aton(address)
+            except socket.error:
+                return False
+            return address.count('.') == 3
+        except socket.error:  # not a valid address
+            return False
+        self.type = IpChecker.ADDR_TYPE_IPV4
+        return True
+
+
+
+    def _is_valid_ipv6_address(self, address):
+        try:
+            socket.inet_pton(socket.AF_INET6, address)
+        except socket.error:  # not a valid address
+            return False
+        self.type = IpChecker.ADDR_TYPE_IPV6
+        return True
+
+    def _find_type(self):
+        if self._is_valid_ipv4_address(self.remote_addr):
+            self.type = IpChecker.ADDR_TYPE_IPV4
+        elif self._is_valid_ipv6_address(self.remote_addr):
+            self.type = IpChecker.ADDR_TYPE_IPV6
+
+    def is_ipv4(self):
+        if self.type is None:
+            self._find_type()
+        return self.type == IpChecker.ADDR_TYPE_IPV4
+
+    def is_ipv6(self):
+        if self.type is None:
+            self._find_type()
+        return self.type == IpChecker.ADDR_TYPE_IPV6
+
+    # Not legal
 
 
 '''
@@ -193,13 +369,37 @@ class _PortScannerWorker(threading.Thread):
 
                 elif res.getlayer(TCP).flags == 0x14:
                     self.closed.append(port)
+            time.sleep(0.2)
         self.parent.update_results(self.ip_addr, self.open, self.closed)
 
     def connect_scan(self):
-        pass
+        for port in self.ports:
+            sport = random.randint(1024, 65535)
+            sock = socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                sock.connect(self.ip_addr, port)
+                self.open.append(port)
+                sock.close()
+            except:
+                self.closed.append(port)
+
+            time.sleep(0.2)
+        self.parent.update_results(self.ip_addr, self.open, self.closed)
+
+    def _next_timeout(self):
+        """
+        Check timeout strategy and return an appropriate value
+        :return:
+        """
+        return 0.1
 
     def run(self):
-        self.syn_scan()
+        if self.scan_type == PortScanner.TYPE_SCAN_SYN:
+            self.syn_scan()
+        elif self.scan_type == PortScanner.TYPE_SCAN_CONNECT:
+            self.connect_scan()
+        else:
+            raise ValueError('Requested Invalid scan type: %d' % self.scan_type )
 
 
 class API():

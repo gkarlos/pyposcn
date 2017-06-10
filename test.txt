@@ -1,0 +1,82 @@
+|   # |   Port | Service                          |
+|-----+--------+----------------------------------|
+|   0 |      7 | Echo                             |
+|   1 |     18 | MSP                              |
+|   2 |     20 | FTP-data                         |
+|   3 |     21 | FTP-control                      |
+|   4 |     22 | SSH                              |
+|   5 |     23 | TELNET                           |
+|   6 |     25 | SMTP                             |
+|   7 |     37 | Time Protocol                    |
+|   8 |     38 | Route Access Protocol (RAP)      |
+|   9 |     43 | WHOIS                            |
+|  10 |     53 | DNS                              |
+|  11 |     69 | TFTP                             |
+|  12 |     70 | Gopher                           |
+|  13 |     79 | Finger                           |
+|  14 |     80 | HTTP                             |
+|  15 |     88 | Kerberos                         |
+|  16 |    103 | X.400                            |
+|  17 |    109 | POP2                             |
+|  18 |    110 | POP3                             |
+|  19 |    115 | SFTP                             |
+|  20 |    119 | NNTP                             |
+|  21 |    123 | NTP                              |
+|  22 |    137 | NETBIOS-NS                       |
+|  23 |    138 | NETBIOS-DGM                      |
+|  24 |    139 | NETBIOS-SSN                      |
+|  25 |    143 | IMAP                             |
+|  26 |    152 | BFTP                             |
+|  27 |    153 | SGMP                             |
+|  28 |    156 | SQL-SERVER                       |
+|  29 |    158 | DMSP                             |
+|  30 |    161 | SNMP                             |
+|  31 |    162 | SNMP Trap                        |
+|  32 |    179 | BGP                              |
+|  33 |    194 | IRC                              |
+|  34 |    199 | SMUX                             |
+|  35 |    213 | IPX                              |
+|  36 |    220 | IMAP3                            |
+|  37 |    264 | BGMP                             |
+|  38 |    318 | TSP                              |
+|  39 |    389 | LDAP                             |
+|  40 |    427 | SLP                              |
+|  41 |    443 | HTTPS                            |
+|  42 |    444 | SNPP                             |
+|  43 |    445 | MS-DS Active Directory/SMB       |
+|  44 |    464 | Kerberos Change/Set password     |
+|  45 |    500 | ISAKMP/IKE                       |
+|  46 |    512 | Rexec                            |
+|  47 |    520 | RIP                              |
+|  48 |    521 | RIPNG                            |
+|  49 |    524 | NCP                              |
+|  50 |    530 | RPC                              |
+|  51 |    543 | Kerberos Login                   |
+|  52 |    544 | Kerberos Remote Shell            |
+|  53 |    546 | DHCP-CLIENT                      |
+|  54 |    547 | DHCP-SERVER                      |
+|  55 |    548 | Apple Filing Protocol (AFP)      |
+|  56 |    593 | HTTP RPC                         |
+|  57 |    631 | Internet Printing Protocol (IPP) |
+|  58 |    636 | LDAPS                            |
+|  59 |    639 | MSDP                             |
+|  60 |    749 | Kerberos Administration          |
+|  61 |    750 | Kerberos v4                      |
+|  62 |    830 | NETCONF-SSH                      |
+|  63 |    831 | NETCONF-BEEP                     |
+|  64 |    832 | NETCONF-HTTPS for SOAP           |
+|  65 |    833 | NETCONF-BEEP for SOAP            |
+|  66 |    853 | DNS over TLS                     |
+|  67 |    873 | rsync                            |
+|  68 |    989 | FTPS-data                        |
+|  69 |    990 | FTPS-control                     |
+|  70 |    992 | TELNET-TLS/SSL                   |
+|  71 |    993 | IMAP-SSL                         |
+|  72 |    995 | POP3-SSL                         |
+|  73 |   2082 | CPANEL                           |
+|  74 |   2083 | CPANEL                           |
+|  75 |   2086 | WHM/CPANEL                       |
+|  76 |   2087 | WHM/CPANEL                       |
+|  77 |   3306 | MYSQL                            |
+|  78 |   8444 | PLESK                            |
+|  79 |  10000 | VIRTUALMIN/WEBMIN                |
