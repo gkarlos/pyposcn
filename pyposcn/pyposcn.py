@@ -11,23 +11,26 @@ SYN_SCAN = PortScanner.TYPE_SCAN_SYN
 CONNECT_SCAN = PortScanner.TYPE_SCAN_CONNECT
 DEFAULT_PORTS = range(1024, 65536)
 
+
 def sudo_check():
     if os.getuid() != 0:
         print >> sys.stderr, 'You need root permissions!'
         sys.exit(1)
 
 
-def ip_check(ip_arg):
-    print ip_arg
-    if not IpChecker(ip_arg[0]).valid():
-        print >> sys.stderr, 'Invalid IP address %s' % ip_arg[0]
-        sys.exit(1)
+def ip_check(ip):
+    if not IpChecker(ip).valid():
+        print >> sys.stderr, 'Invalid IP address %s' % ip
+        return False
+    return True
 
 
 def arg_parse():
     parser = argparse.ArgumentParser(description="Pyposcn port scanner")
 
-    parser.add_argument('-H', nargs=1, metavar='ip', type=str, help='target ip address')
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('-H', nargs=1, metavar='ip', type=str, help='target ip address')
+    input_group.add_argument('-F', nargs='+', metavar='filename', help='input file')
 
     port_group = parser.add_mutually_exclusive_group()
     port_group.add_argument('-pr', nargs=2, metavar='port', type=int, help='port range')
@@ -58,12 +61,12 @@ def arg_parse():
 
     parser.add_argument('--version', '-version', action='version', version='Pyposcn (version 0.1 dev)')
     args = parser.parse_args()
-    ip_check(args.H)
+    #ip_check(args.H)
     global ip, port_start, port_end, file_out
     ip = '192.168.1.1'#args.ip[0]
     port_start = 1110
     port_end = 1120
-    print args.v
+    return args
 
 def scan(ip, ports):
     print ["Scanning", ip, ports]
@@ -84,12 +87,95 @@ def scan_ports(ip, start, end, file=None):
 
     print res
 
+def parse_ip(ip_str):
+    ip_str = ip_str.strip()
+    print ip_str, len(ip_str)
+    return ip_str if ip_check(ip_str) else None
 
+
+def parse_ports(ports_str, line_number):
+    #check range first
+    try: #parse a port range
+        if not ',' in ports_str:
+            raise ValueError
+
+        print 'Reading a port range'
+        port_range = map(int, map(str.strip, ports_str.split(',')))
+
+        valid_range = range(1, 65535)
+        if len(port_range) != 2:
+            print 'Invalid Port Range (too many arguments)'
+            return None
+
+        if (port_range[0] not in valid_range) or (port_range[1] not in valid_range):
+            print 'Invalid port range bounds. Must be in [1, 65536]'
+            return None
+
+        return range(port_range[0], port_range[1] + 1)
+    except ValueError:  # parse a port list
+        port_list = map(int, map(str.strip, ports_str.split()))
+        if len(port_list) == 0:
+            print 'Invalid Ports list at line %d' % (line_number + 1)
+            return None
+        return port_list
+
+
+def parse_line(line, line_number):
+    line = line.split('#')
+    lhs = line[0].split(':')
+
+    ip = parse_ip(lhs[0])
+    ports = parse_ports(lhs[1].strip(), line_number)
+
+    if ip and ports:
+        return ip, ports
+
+    if not ip:
+        print 'Invalid IP input'
+    if not ports:
+        print 'Invalid Ports input'
+    return None
+
+
+def workload_from_file(f):
+    result = {}
+    for i, line in enumerate(f):
+        l = parse_line(line, i)
+        if l:
+            result[l[0]] = list(set(result[l[0]] + l[1])) if l[0] in result else l[1]
+    return result
+
+
+def workload_from_files(files):
+    result = {}
+    for f in files:
+        temp = workload_from_file(open(f))
+        print temp
+        for ip in temp:
+            result[ip] = list(set(result[ip] + temp[ip])) if ip in result else temp[ip]
+    return result
+
+def scan_single(args):
+    print 'Single IP scan'
+
+def scan_bulk(args):
+    print 'Bulk scan. Input files: ', args.F
+    workload = workload_from_files(args.F)
+    print workload
+
+def start(args):
+    if args.H:
+        scan_single(args)
+    elif args.F:
+        scan_bulk(args)
 
 
 
 if __name__ == '__main__':
     sudo_check()
-    KnownPorts.pretty_print()
-    #arg_parse()
+    #KnownPorts.pretty_print()
+    start(arg_parse())
+    γ
+
+
 #scan_ports(ip, 1111, 1111)

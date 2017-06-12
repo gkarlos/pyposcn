@@ -241,11 +241,13 @@ class PortScanner(object):
 
     TYPE_SCAN_SYN = 0
     TYPE_SCAN_CONNECT = 1
-    TYPE_SCANNER_SEQ = 2
-    TYPE_SCANNER_PAR = 3
+    TYPE_SCAN_FIN = 2
+    TIMEOUT_FIXED = 3
+    TIMEOUT_RANDOM = 4
+    TYPE_SCANNER_SEQ = 5
+    TYPE_SCANNER_PAR = 6
 
-
-    WORKER_JOB_THRESH = 10
+    _WORKER_JOB_THRESH = 10
 
     def init_seq(self):
         pass
