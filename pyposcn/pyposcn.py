@@ -2,6 +2,7 @@ import argparse
 from api.networking import KnownPorts
 import os
 import sys
+from utils import Parser
 
 from api.networking import PortScanner, IpChecker
 
@@ -19,6 +20,7 @@ def sudo_check():
 
 
 def ip_check(ip):
+    # type: (object) -> object
     if not IpChecker(ip).valid():
         print >> sys.stderr, 'Invalid IP address %s' % ip
         return False
@@ -87,80 +89,13 @@ def scan_ports(ip, start, end, file=None):
 
     print res
 
-def parse_ip(ip_str):
-    ip_str = ip_str.strip()
-    print ip_str, len(ip_str)
-    return ip_str if ip_check(ip_str) else None
-
-
-def parse_ports(ports_str, line_number):
-    #check range first
-    try: #parse a port range
-        if not ',' in ports_str:
-            raise ValueError
-
-        print 'Reading a port range'
-        port_range = map(int, map(str.strip, ports_str.split(',')))
-
-        valid_range = range(1, 65535)
-        if len(port_range) != 2:
-            print 'Invalid Port Range (too many arguments)'
-            return None
-
-        if (port_range[0] not in valid_range) or (port_range[1] not in valid_range):
-            print 'Invalid port range bounds. Must be in [1, 65536]'
-            return None
-
-        return range(port_range[0], port_range[1] + 1)
-    except ValueError:  # parse a port list
-        port_list = map(int, map(str.strip, ports_str.split()))
-        if len(port_list) == 0:
-            print 'Invalid Ports list at line %d' % (line_number + 1)
-            return None
-        return port_list
-
-
-def parse_line(line, line_number):
-    line = line.split('#')
-    lhs = line[0].split(':')
-
-    ip = parse_ip(lhs[0])
-    ports = parse_ports(lhs[1].strip(), line_number)
-
-    if ip and ports:
-        return ip, ports
-
-    if not ip:
-        print 'Invalid IP input'
-    if not ports:
-        print 'Invalid Ports input'
-    return None
-
-
-def workload_from_file(f):
-    result = {}
-    for i, line in enumerate(f):
-        l = parse_line(line, i)
-        if l:
-            result[l[0]] = list(set(result[l[0]] + l[1])) if l[0] in result else l[1]
-    return result
-
-
-def workload_from_files(files):
-    result = {}
-    for f in files:
-        temp = workload_from_file(open(f))
-        print temp
-        for ip in temp:
-            result[ip] = list(set(result[ip] + temp[ip])) if ip in result else temp[ip]
-    return result
 
 def scan_single(args):
     print 'Single IP scan'
 
 def scan_bulk(args):
     print 'Bulk scan. Input files: ', args.F
-    workload = workload_from_files(args.F)
+    workload = Parser(args.F).get()
     print workload
 
 def start(args):
@@ -175,7 +110,7 @@ if __name__ == '__main__':
     sudo_check()
     #KnownPorts.pretty_print()
     start(arg_parse())
-    γ
+
 
 
 #scan_ports(ip, 1111, 1111)
