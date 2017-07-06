@@ -14,12 +14,12 @@ classifiers=[
     'Programming Language :: Python :: 2.7'
 ]
 
-keywords = 'networking ports port-scanner api'
+keywords = 'networking ports port-scanner lib'
 
 metadata = dict(
     name = "Pyposcn",
     version='0.1',
-    description='A port scanner tool and API',
+    description='A port scanner tool and library',
     author='George Karlos',
     author_email='blabla@gmail.com',
     license='MIT',

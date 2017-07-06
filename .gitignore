@@ -1,3 +1,5 @@
 .idea/
 README.md
 *.pyc
+docs/
+tests/test_scapy_lookup.py

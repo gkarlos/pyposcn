@@ -1,34 +1,36 @@
 from api.networking import IpChecker
 import sys
 
+
+def query(question, default="yes"):
+    valid = {"yes": True, "y": True, "ye": True,
+             "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = raw_input().lower()
+        if default is not None and choice == '':
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' "
+                             "(or 'y' or 'n').\n")
+
 class Parser(object):
 
     def __init__(self, input_files):
         self.input_files = input_files
         self.ignored_lines = 0
 
-    def _query(self, question, default="yes"):
-        valid = {"yes": True, "y": True, "ye": True,
-                 "no": False, "n": False}
-        if default is None:
-            prompt = " [y/n] "
-        elif default == "yes":
-            prompt = " [Y/n] "
-        elif default == "no":
-            prompt = " [y/N] "
-        else:
-            raise ValueError("invalid default answer: '%s'" % default)
-
-        while True:
-            sys.stdout.write(question + prompt)
-            choice = raw_input().lower()
-            if default is not None and choice == '':
-                return valid[default]
-            elif choice in valid:
-                return valid[choice]
-            else:
-                sys.stdout.write("Please respond with 'yes' or 'no' "
-                                 "(or 'y' or 'n').\n")
 
     def _parse_ip(self, ip_str):
         ip_str = ip_str.strip()
@@ -92,7 +94,7 @@ class Parser(object):
         if len(result.items()) > 0:
             if self.ignored_lines > 0:
 
-                continue_anyway = self._query('%d line%s ha%s been ignored. Continue anyway?' %
+                continue_anyway = query('%d line%s ha%s been ignored. Continue anyway?' %
                     (self.ignored_lines, ('s' if self.ignored_lines > 1 else ''), ('ve' if self.ignored_lines > 1 else 's')))
 
                 if not continue_anyway:

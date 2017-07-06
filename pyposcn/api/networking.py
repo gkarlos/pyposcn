@@ -2,7 +2,9 @@ import threading
 import os
 import socket
 import time
+import pprint
 from scapy.layers.inet import IP, TCP, random, sr1, ICMP, sr
+
 
 class KnownPorts(object):
     COMMON = {
@@ -121,21 +123,21 @@ class KnownPorts(object):
     @staticmethod
     def pretty_print():
         from tabulate import tabulate
-        #sorted_common_ports = sorted(KnownPorts.COMMON_PORTS)
+        # sorted_common_ports = sorted(KnownPorts.COMMON_PORTS)
         data = [[key, KnownPorts.COMMON[key]] for key in sorted(KnownPorts.COMMON)]
-        #data = map(list, KnownPorts.COMMON_PORTS.items())
+        # data = map(list, KnownPorts.COMMON_PORTS.items())
         print tabulate(data, headers=['#', 'Port', 'Service'], tablefmt='orgtbl', showindex='always')
-
 
 
 if os.name != "nt":
     import fcntl
     import struct
 
+
     def get_interface_ip(ifname):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s',
-                                ifname[:15]))[20:24])
+                                                                            ifname[:15]))[20:24])
 
 
 def get_lan_ip():
@@ -151,7 +153,7 @@ def get_lan_ip():
             "ath0",
             "ath1",
             "ppp0",
-            ]
+        ]
         for ifname in interfaces:
             try:
                 ip = get_interface_ip(ifname)
@@ -160,14 +162,16 @@ def get_lan_ip():
                 pass
     return ip
 
+
 LOCAL_ADDR = get_lan_ip()
+
 
 # noinspection PyBroadException
 class IpChecker():
     ADDR_TYPE_IPV4 = 0
     ADDR_TYPE_IPV6 = 1
 
-    def __init__ (self, remote_addr):
+    def __init__(self, remote_addr):
         self.remote_addr = remote_addr
         self.lock = threading.Lock()
         self.type = None
@@ -175,7 +179,7 @@ class IpChecker():
     def up(self):
         self.lock.acquire()
         try:
-            ping = sr1(IP(dst=self.remote_addr)/ICMP(), timeout=10, verbose=0)
+            ping = sr1(IP(dst=self.remote_addr) / ICMP(), timeout=10, verbose=0)
             if str(type(ping)) == "<type 'NoneType'>":
                 return False
             return True
@@ -203,8 +207,6 @@ class IpChecker():
         self.type = IpChecker.ADDR_TYPE_IPV4
         return True
 
-
-
     def _is_valid_ipv6_address(self, address):
         try:
             socket.inet_pton(socket.AF_INET6, address)
@@ -229,36 +231,70 @@ class IpChecker():
             self._find_type()
         return self.type == IpChecker.ADDR_TYPE_IPV6
 
-    # Not legal
 
-
-'''
-A sequentianl PortScanner will do work in the same thread that called start()
-
-A parallel PortScanner will spawn workers!
-'''
 class PortScanner(object):
+    '''
+    A sequential PortScanner will do work in the same thread that called start()
 
-    TYPE_SCAN_SYN = 0
-    TYPE_SCAN_CONNECT = 1
-    TYPE_SCAN_FIN = 2
+    A parallel PortScanner will spawn workers after start() and block the caller
+    until all workers are done.
+    '''
+
+    SCAN_TYPE_SYN = 0
+    SCAN_TYPE_CONNECT = 1
+    SCAN_TYPE_FIN = 2
+
+    _scan_types = {
+        SCAN_TYPE_SYN : "SCAN_TYPE_SYN",
+        SCAN_TYPE_CONNECT : "SCAN_TYPE_CONNECT",
+        SCAN_TYPE_FIN : "SCAN_TYPE_FIN"
+    }
+
     TIMEOUT_FIXED = 3
     TIMEOUT_RANDOM = 4
-    TYPE_SCANNER_SEQ = 5
-    TYPE_SCANNER_PAR = 6
+
+    SCANNER_TYPE_SEQ = 5
+    SCANNER_TYPE_PAR = 6
+
+    _scanner_types = {
+        SCANNER_TYPE_SEQ: "SCANNER_TYPE_SEQ",
+        SCANNER_TYPE_PAR: "SCANNER_TYPE_PAR"
+    }
 
     _WORKER_JOB_THRESH = 10
 
+    def _validate_args(self, workload, scan_type, scanner_type):
+        """ Check if constructor arguments are correct and
+            raise an appropriate exception when not """
+
+        if not isinstance(workload, dict):
+            raise TypeError("workload should be a {ip: [port...]} dict")
+        if not isinstance(scan_type, int):
+            raise TypeError("scan_type should be an int")
+        if not isinstance(scanner_type, int):
+            raise TypeError("scanner_type should be an int")
+
+        if scan_type != self.SCAN_TYPE_CONNECT and scan_type != self.SCAN_TYPE_SYN and scan_type != self.SCAN_TYPE_FIN:
+            raise ValueError("invalid scan_type: %d. Expected \
+                              SCAN_TYPE_SYN(0) | SCAN_TYPE_CONNECT(1) | SCAN_TYPE_FIN(2)" % scan_type)
+
+        if scanner_type != self.SCANNER_TYPE_SEQ and scanner_type != self.SCANNER_TYPE_PAR:
+            raise ValueError("invalid scanner_type: %d. Expected \
+                              PortScanner.SCANNER_TYPE_SEQ(5) | PortScanner.SCANNER_TYPE_PAR(6)" % scanner_type)
+
     def init_seq(self):
+        """ Initialize a sequential PortScanner """
         pass
 
     def init_par(self):
+        """ Initialize a parallel PortScanner """
         self.workers = []
         for ip in self.workload:
-            self.worker_results[ip] = {'open' : [], 'closed' : []}
+            self.worker_results[ip] = {'open': [], 'closed': []}
             print ip
             ports = self.workload[ip]
             nworkers = len(ports) / 10 if len(ports) / 10 == 0 else len(ports) / 10 + 1
+
             print 'Requested %s: %s. Will spawn %d workers' % (ip, str(ports), nworkers)
 
             chunk = len(ports) / nworkers
@@ -270,36 +306,40 @@ class PortScanner(object):
                     left = left - 1
                 self.workers.append(_PortScannerWorker(ip, self.scan_type, worker_load, self))
 
+
+
     def __init__(self, workload, scan_type, scanner_type):
-        self.start_port = 80
-        self.end_port = 90
-        self.ports = range(self.start_port, self.end_port + 1)
+        self._validate_args(workload, scan_type, scanner_type)
+        print "Requested: %s, %s for:" % (self._scan_types[scan_type], self._scanner_types[scanner_type])
+        print workload
+        # self.start_port = 80
+        # self.end_port = 90
+        # self.ports = range(self.start_port, self.end_port + 1)
 
-        self.scan_type = scan_type
-        self.scanner_type = scanner_type
-        self.workload = workload
-        self.worker_results = {}
+        # self.scan_type = scan_type
+        # self.scanner_type = scanner_type
+        # self.workload = workload
+        # self.worker_results = {}
+        #
+        # self.lock = threading.Lock()
+        #
+        # if self.scanner_type == PortScanner.SCANNER_TYPE_SEQ:
+        #     self.init_seq()
+        # elif self.scanner_type == PortScanner.SCANNER_TYPE_PAR:
+        #     self.init_par()
 
-        self.lock = threading.Lock()
 
-        if self.scanner_type == PortScanner.TYPE_SCANNER_SEQ:
-            self.init_seq()
-        elif self.scanner_type == PortScanner.TYPE_SCANNER_PAR:
-            self.init_par()
-        else:
-            raise ValueError('Got scan_type = %d. Expected PortScanner.TYPE_SCANNER_SEQ(2) | PortScanner.TYPE_SCANNER_PAR(3)' % self.scan_type)
-
-        #self.ip = IP(dst=self.REMOTE_ADDR)
-
-    # Thread-safe method for updating the total results dict
-    # To be used by each worker
-    # @ip - Ip key to the global dictionary
-    # @open - A list of open ports
-    # @closed - A list of closed ports
     def update_results(self, ip, open, closed):
+        """
+          Thread-safe method for updating the total results dict. To be used by each worker
+
+          @ip - Ip key to the global dictionary
+          @open - A list of open ports
+          @closed - A list of closed ports
+        """
         self.lock.acquire()
         if len(open) > 0:
-            self.worker_results[ip]['open'] = self.worker_results[ip]['open'] + open
+            self.worker_results[ip]['open'] += open
         if len(closed) > 0:
             self.worker_results[ip]['closed'] = self.worker_results[ip]['closed'] + closed
         self.lock.release()
@@ -312,19 +352,20 @@ class PortScanner(object):
 
     def start_par(self):
         for worker in self.workers:
-            print 'Worker Started: ' + str(worker.ip_addr) + ':' + str(worker.ports) + (' SYN' if worker.scan_type == PortScanner.TYPE_SCAN_SYN else ' CONNECT')
+            print 'Worker Started: ' + str(worker.ip_addr) + ':' \
+                  + str(worker.ports) + (' SYN' if worker.scan_type == PortScanner.SCAN_TYPE_SYN else ' CONNECT')
 
             worker.start()
         for worker in self.workers:
             worker.join()
 
     def start(self):
-        if self.scanner_type == PortScanner.TYPE_SCANNER_PAR:
+        if self.scanner_type == PortScanner.SCANNER_TYPE_PAR:
             self.start_par()
         else:
             self.start_seq()
 
-        #print self.worker_results
+            # print self.worker_results
 
     def init_net(self):
         pass
@@ -333,13 +374,12 @@ class PortScanner(object):
         pass
 
     def run(self):
-        if self.scan_type == PortScanner.TYPE_SCAN_SYN:
+        if self.scan_type == PortScanner.SCAN_TYPE_SYN:
             self.syn_scan()
-        elif self.scan_type == PortScanner.TYPE_SCAN_CONNECT:
+        elif self.scan_type == PortScanner.SCAN_TYPE_CONNECT:
             self.connect_scan()
         else:
             print "Invalid Scan Type: %s" % self.scan_type
-
 
 
 class _PortScannerWorker(threading.Thread):
@@ -351,11 +391,6 @@ class _PortScannerWorker(threading.Thread):
         self.parent = parent
         self.open = []
         self.closed = []
-
-
-    # def run(self):
-    #     print 'Worker Started: ' + str(self.ip_addr) + (' SYN' if self.scan_type == PortScanner.TYPE_SCAN_SYN else ' CONNECT')
-
 
     def syn_scan(self):
         for port in self.ports:
@@ -396,12 +431,12 @@ class _PortScannerWorker(threading.Thread):
         return 0.1
 
     def run(self):
-        if self.scan_type == PortScanner.TYPE_SCAN_SYN:
+        if self.scan_type == PortScanner.SCAN_TYPE_SYN:
             self.syn_scan()
-        elif self.scan_type == PortScanner.TYPE_SCAN_CONNECT:
+        elif self.scan_type == PortScanner.SCAN_TYPE_CONNECT:
             self.connect_scan()
         else:
-            raise ValueError('Requested Invalid scan type: %d' % self.scan_type )
+            raise ValueError('Requested Invalid scan type: %d' % self.scan_type)
 
 
 class API():
