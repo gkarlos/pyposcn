@@ -2,7 +2,7 @@ import threading
 import os
 import socket
 import time
-import pprint
+import sys
 from scapy.layers.inet import IP, TCP, random, sr1, ICMP, sr
 
 
@@ -262,8 +262,9 @@ class PortScanner(object):
     }
 
     _WORKER_JOB_THRESH = 10
+    _DEFAULT_TIMEOUT = 1
 
-    def _validate_args(self, workload, scan_type, scanner_type):
+    def _validate_args(self, workload, scan_type, scanner_type, timeout):
         """ Check if constructor arguments are correct and
             raise an appropriate exception when not """
 
@@ -282,20 +283,32 @@ class PortScanner(object):
             raise ValueError("invalid scanner_type: %d. Expected \
                               PortScanner.SCANNER_TYPE_SEQ(5) | PortScanner.SCANNER_TYPE_PAR(6)" % scanner_type)
 
+        if timeout != self._DEFAULT_TIMEOUT:
+            # TODO add tests for this case
+            if isinstance(timeout, int) and not timeout > 0:
+                raise ValueError("invalid timeout value: %d. Expected > 0 or 'random'" % timeout)
+            elif isinstance(timeout, str) and not timeout == 'random':
+                raise ValueError("invalid timeout value: %s. Expected > 0 or 'random'" % timeout)
+            else:
+                raise TypeError("timeout should an int > 0 or 'random'")
+
     def init_seq(self):
         """ Initialize a sequential PortScanner """
         pass
 
+
     def init_par(self):
         """ Initialize a parallel PortScanner """
-        self.workers = []
         for ip in self.workload:
             self.worker_results[ip] = {'open': [], 'closed': []}
             print ip
-            ports = self.workload[ip]
-            nworkers = len(ports) / 10 if len(ports) / 10 == 0 else len(ports) / 10 + 1
+            ports = map(int, self.workload[ip])
+            print ports
+            print len(ports)
+            nworkers = (len(ports) / 10) + 1 if len(ports) / 10 < 1 else (len(ports) / 10)
 
-            print 'Requested %s: %s. Will spawn %d workers' % (ip, str(ports), nworkers)
+            print 'Requested %s: %s. Will spawn %d worker%s for this IP' \
+                  % (ip, str(ports), nworkers, '' if nworkers == 1 else 's')
 
             chunk = len(ports) / nworkers
             left = len(ports) % nworkers
@@ -308,25 +321,26 @@ class PortScanner(object):
 
 
 
-    def __init__(self, workload, scan_type, scanner_type):
-        self._validate_args(workload, scan_type, scanner_type)
-        print "Requested: %s, %s for:" % (self._scan_types[scan_type], self._scanner_types[scanner_type])
+    def __init__(self, workload, scan_type, scanner_type, timeout=_DEFAULT_TIMEOUT):
+        self._validate_args(workload, scan_type, scanner_type, timeout)
+        print "Requested: %s, %s with timeout %s for:" \
+              % (self._scan_types[scan_type], self._scanner_types[scanner_type], str(timeout))
         print workload
-        # self.start_port = 80
-        # self.end_port = 90
-        # self.ports = range(self.start_port, self.end_port + 1)
 
-        # self.scan_type = scan_type
-        # self.scanner_type = scanner_type
-        # self.workload = workload
-        # self.worker_results = {}
-        #
-        # self.lock = threading.Lock()
-        #
-        # if self.scanner_type == PortScanner.SCANNER_TYPE_SEQ:
-        #     self.init_seq()
-        # elif self.scanner_type == PortScanner.SCANNER_TYPE_PAR:
-        #     self.init_par()
+        self.workload = workload
+        self.scan_type = scan_type
+        self.scanner_type = scanner_type
+        self.timeout = timeout
+
+        # parallel scanner stuff
+        self.workers = []
+        self.worker_results = {}
+        self.lock = threading.Lock()
+
+        if self.scanner_type == PortScanner.SCANNER_TYPE_SEQ:
+            self.init_seq()
+        elif self.scanner_type == PortScanner.SCANNER_TYPE_PAR:
+            self.init_par()
 
 
     def update_results(self, ip, open, closed):
@@ -341,16 +355,21 @@ class PortScanner(object):
         if len(open) > 0:
             self.worker_results[ip]['open'] += open
         if len(closed) > 0:
-            self.worker_results[ip]['closed'] = self.worker_results[ip]['closed'] + closed
+            self.worker_results[ip]['closed'] += closed
         self.lock.release()
 
     def results(self):
         return self.worker_results
 
     def start_seq(self):
-        pass
+        for ip in self.workload:
+            self.worker_results[ip] = {'open': [], 'closed': []}
+            worker = _PortScannerWorker(ip, self.scan_type, self.workload[ip], self)
+            worker.start()
+            worker.join()
 
     def start_par(self):
+        """ blocking call that starts all the workers and waits for result """
         for worker in self.workers:
             print 'Worker Started: ' + str(worker.ip_addr) + ':' \
                   + str(worker.ports) + (' SYN' if worker.scan_type == PortScanner.SCAN_TYPE_SYN else ' CONNECT')
@@ -383,6 +402,12 @@ class PortScanner(object):
 
 
 class _PortScannerWorker(threading.Thread):
+    """
+    In general there should be 1 worker per host
+
+    TODO: Increased parallelism
+          A worker spawns more threads -> Risk of getting blocked by the remote host!
+    """
     def __init__(self, ip_addr, scan_type, ports, parent):
         threading.Thread.__init__(self)
         self.scan_type = scan_type
@@ -395,33 +420,40 @@ class _PortScannerWorker(threading.Thread):
     def syn_scan(self):
         for port in self.ports:
             sport = random.randint(1024, 65535)
-            syn = TCP(sport=sport, dport=port, flags='S', seq=1000)
-            res = sr1(IP(dst=self.ip_addr) / syn, timeout=1, verbose=0)
+            syn = TCP(sport=sport, dport=port, flags='S', seq=random.randint(1024, 65535))
+            res = sr1(IP(dst=self.ip_addr) / syn, timeout=1, verbose=1)
             if str(type(res)) == "<type 'NoneType'>":
+                print "I'm here"
                 self.closed.append(port)
             elif res.haslayer(TCP):
                 if res.getlayer(TCP).flags == 0x12:
-                    rst = sr(IP(dst=self.ip_addr) / TCP(sport=sport, dport=port, flags='AR'), timeout=1, verbose=0)
+                    rst = sr(IP(dst=self.ip_addr) /
+                             TCP(sport=sport, dport=port, flags='AR'), timeout=1, verbose=0)
                     self.open.append(port)
 
                 elif res.getlayer(TCP).flags == 0x14:
                     self.closed.append(port)
+
             time.sleep(0.2)
         self.parent.update_results(self.ip_addr, self.open, self.closed)
 
     def connect_scan(self):
         for port in self.ports:
-            sport = random.randint(1024, 65535)
-            sock = socket(socket.AF_INET, socket.SOCK_STREAM)
+            sport = random.randint(1024, 65535) # choose a random source port
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)  # TODO change to parameterized timeout
             try:
-                sock.connect(self.ip_addr, port)
+                sock.connect((self.ip_addr, port))
                 self.open.append(port)
                 sock.close()
-            except:
+            except socket.error:
                 self.closed.append(port)
 
             time.sleep(0.2)
         self.parent.update_results(self.ip_addr, self.open, self.closed)
+
+    def fin_scan(self):
+        raise NotImplementedError()
 
     def _next_timeout(self):
         """
@@ -435,9 +467,8 @@ class _PortScannerWorker(threading.Thread):
             self.syn_scan()
         elif self.scan_type == PortScanner.SCAN_TYPE_CONNECT:
             self.connect_scan()
+        elif self.scan_type == PortScanner.SCAN_TYPE_FIN:
+            self.fin_scan()
         else:
             raise ValueError('Requested Invalid scan type: %d' % self.scan_type)
 
-
-class API():
-    pass
