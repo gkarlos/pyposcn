@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 
-python pyposcn/pyposcn.py "$@"
+#auto-generated script
+
+python /home/gkarlos/workspaces/git/pyposcn/pyposcn/pyposcn.py $@

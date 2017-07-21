@@ -1,6 +1,7 @@
 import argparse
 import os
 from api.networking import KnownPorts
+from tabulate import tabulate
 from utils import *
 
 from api.networking import PortScanner, IpChecker
@@ -133,6 +134,19 @@ def single_address_input(args):
 
     return workload
 
+def output(scan_results):
+
+    titles = ['ip', 'port', 'status', 'service']
+    table = []
+    for ip in scan_results:
+        print ip
+        all_ports_sorted = sorted(scan_results[ip]['open'] + scan_results[ip]['closed'])
+        for port in all_ports_sorted:
+            table.append([ip, port, 'open' if port in scan_results[ip]['open'] else 'closed', KnownPorts.check(port)])
+
+    print tabulate(table, headers=titles, tablefmt='orgtbl', showindex=False)
+
+
 
 def scan(args):
     scan_type = PortScanner.SCAN_TYPE_SYN if args.syn else \
@@ -141,7 +155,7 @@ def scan(args):
     workload = Parser(args.F).get() if args.F else single_address_input(args)
     scanner = PortScanner(workload, scan_type, scanner_type)
     scanner.start()
-    print scanner.results()
+    output(scanner.results())
 
 
 def start(args):

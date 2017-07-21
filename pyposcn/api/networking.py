@@ -111,20 +111,28 @@ class KnownPorts(object):
     @staticmethod
     def check(p):
         port = int(p)
-        if str(port) in KnownPorts.COMMON:
-            return KnownPorts.COMMON[str(port)]
+        if port in KnownPorts.COMMON:
+            return KnownPorts.COMMON[port]
+        elif port in KnownPorts.REGISTERED:
+            return KnownPorts.REGISTERED[port]
         else:
-            return ''
+            return 'unknown'
 
     @staticmethod
     def get_common():
         return KnownPorts.COMMON
 
     @staticmethod
+    def get_registered():
+        return KnownPorts.REGISTERED
+
+    @staticmethod
     def pretty_print():
         from tabulate import tabulate
         # sorted_common_ports = sorted(KnownPorts.COMMON_PORTS)
         data = [[key, KnownPorts.COMMON[key]] for key in sorted(KnownPorts.COMMON)]
+        for d in data:
+            print d
         # data = map(list, KnownPorts.COMMON_PORTS.items())
         print tabulate(data, headers=['#', 'Port', 'Service'], tablefmt='orgtbl', showindex='always')
 
